@@ -17,9 +17,9 @@ class ProductProduct(models.Model):
             ('open_paid', 'Open and Paid'),
             ('draft_open_paid', 'Draft, Open and Paid')
         ], string='Invoice State', readonly=True)
-    sale_avg_price = fields.Float(compute='_compute_product_margin_fields_values', string='Avg. Unit Price',
+    sale_avg_price = fields.Float(compute='_compute_product_margin_fields_values', string='Avg. Sale Unit Price',
         help="Avg. Price in Customer Invoices.")
-    purchase_avg_price = fields.Float(compute='_compute_product_margin_fields_values', string='Avg. Unit Price',
+    purchase_avg_price = fields.Float(compute='_compute_product_margin_fields_values', string='Avg. Purchase Unit Price',
         help="Avg. Price in Vendor Bills ")
     sale_num_invoiced = fields.Float(compute='_compute_product_margin_fields_values', string='# Invoiced in Sale',
         help="Sum of Quantity in Customer Invoices")
@@ -107,7 +107,7 @@ class ProductProduct(models.Model):
                 select
                     sum(l.price_unit * l.quantity)/nullif(sum(l.quantity),0) as avg_unit_price,
                     sum(l.quantity) as num_qty,
-                    sum(l.quantity * (l.price_subtotal/(nullif(l.quantity,0)))) as total,
+                    sum(l.quantity * (l.price_subtotal_signed/(nullif(l.quantity,0)))) as total,
                     sum(l.quantity * pt.list_price) as sale_expected
                 from account_invoice_line l
                 left join account_invoice i on (l.invoice_id = i.id)

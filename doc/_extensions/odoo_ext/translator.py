@@ -190,6 +190,18 @@ class BootstrapTranslator(nodes.NodeVisitor, object):
     def depart_compact_paragraph(self, node):
         pass
 
+    def visit_problematic(self, node):
+        if node.hasattr('refid'):
+            self.body.append('<a href="#%s">' % node['refid'])
+            self.context.append('</a>')
+        else:
+            self.context.append('')
+        self.body.append(self.starttag(node, 'span', CLASS='problematic'))
+
+    def depart_problematic(self, node):
+        self.body.append('</span>')
+        self.body.append(self.context.pop())
+
     def visit_literal_block(self, node):
         if node.rawsource != node.astext():
             # most probably a parsed-literal block -- don't highlight
@@ -208,7 +220,7 @@ class BootstrapTranslator(nodes.NodeVisitor, object):
         else:
             opts = {}
 
-        def warner(msg):
+        def warner(msg, **kw):
             self.builder.warn(msg, (self.builder.current_docname, node.line))
         highlighted = self.builder.highlighter.highlight_block(
             node.rawsource, lang, opts=opts, warn=warner, linenos=linenos,

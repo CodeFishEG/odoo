@@ -1,7 +1,7 @@
 odoo.define('web_editor.transcoder', function (require) {
 'use strict';
 
-var widget = require('web_editor.widget');
+var base = require('web_editor.base');
 
 var rulesCache = [];
 
@@ -37,7 +37,6 @@ function getMatchedCSSRules(a) {
                             selectorText.indexOf(':active') === -1 &&
                             selectorText.indexOf(':link') === -1 &&
                             selectorText.indexOf('::') === -1 &&
-                            selectorText.indexOf('"') === -1 &&
                             selectorText.indexOf("'") === -1) {
                         var st = selectorText.split(/\s*,\s*/);
                         for (k = 0 ; k < st.length ; k++) {
@@ -108,9 +107,14 @@ function getMatchedCSSRules(a) {
     // The css generates all the attributes separately and not in simplified form.
     // In order to have a better compatibility (outlook for example) we simplify the css tags.
     // e.g. border-left-style: none; border-bottom-s .... will be simplified in border-style = none
-    _.each([['margin'], ['padding'], ['border', 'style']], function (attr) {
-        var p = attr[0];
-        var e = attr[1] ? '-' + attr[1] : '';
+    _.each([
+        {property: 'margin'},
+        {property: 'padding'},
+        {property: 'border', propertyEnd: '-style', defaultValue: 'none'},
+    ], function (propertyInfo) {
+        var p = propertyInfo.property;
+        var e = propertyInfo.propertyEnd || '';
+        var defVal = propertyInfo.defaultValue || 0;
 
         if (style[p+'-top'+e] || style[p+'-right'+e] || style[p+'-bottom'+e] || style[p+'-left'+e]) {
             if (style[p+'-top'+e] === style[p+'-right'+e] && style[p+'-top'+e] === style[p+'-bottom'+e] && style[p+'-top'+e] === style[p+'-left'+e]) {
@@ -119,7 +123,7 @@ function getMatchedCSSRules(a) {
             }
             else {
                 // keep => property: [top value] [right value] [bottom value] [left value];
-                style[p+e] = (style[p+'-top'+e] || 0) + ' ' + (style[p+'-right'+e] || 0) + ' ' + (style[p+'-bottom'+e] || 0) + ' ' + (style[p+'-left'+e] || 0);
+                style[p+e] = (style[p+'-top'+e] || defVal) + ' ' + (style[p+'-right'+e] || defVal) + ' ' + (style[p+'-bottom'+e] || defVal) + ' ' + (style[p+'-left'+e] || defVal);
                 if (style[p+e].indexOf('inherit') !== -1 || style[p+e].indexOf('initial') !== -1) {
                     // keep => property-top: [top value]; property-right: [right value]; property-bottom: [bottom value]; property-left: [left value];
                     delete style[p+e];
@@ -170,7 +174,7 @@ function getMatchedCSSRules(a) {
                 break;
             }
             $el = $el.parent();
-        } while (!$el.is('html'));
+        } while ($el.length && !$el.is('html'));
     }
 
     return style;
@@ -186,11 +190,11 @@ function fontToImg($editable) {
     $editable.find('.fa').each(function () {
         var $font = $(this);
         var icon, content;
-        _.find(widget.fontIcons, function (font) {
-            return _.find(widget.getCssSelectors(font.parser), function (css) {
-                if ($font.is(css[0].replace(/::?before/g, ''))) {
-                    icon = css[2].split('-').shift();
-                    content = css[1].match(/content:\s*['"]?(.)['"]?/)[1];
+        _.find(base.fontIcons, function (font) {
+            return _.find(base.getCssSelectors(font.parser), function (data) {
+                if ($font.is(data.selector.replace(/::?before/g, ''))) {
+                    icon = data.names[0].split('-').shift();
+                    content = data.css.match(/content:\s*['"]?(.)['"]?/)[1];
                     return true;
                 }
             });
@@ -243,6 +247,13 @@ function applyOverDescendants(node, func) {
             func(node);
             applyOverDescendants(node, func);
         }
+        var $node = $(node);
+        if (node.nodeName === 'A' && $node.hasClass('btn') && !$node.children().length && $(node).parents('.o_outlook_hack').length)  {
+            node = $(node).parents('.o_outlook_hack')[0];
+        }
+        else if (node.nodeName === 'IMG' && $node.parent('p').hasClass('o_outlook_hack')) {
+            node = $node.parent()[0];
+        }
         node = node.nextSibling;
     }
 }
@@ -277,11 +288,12 @@ function classToStyle($editable) {
         }
 
         // Outlook
-        if (node.nodeName === 'A' && $target.hasClass('btn') && !$target.children().length) {
-            var $hack = $('<table class="o_outlook_hack"><tr><td></td></tr></table>');
+        if (node.nodeName === 'A' && $target.hasClass('btn') && !$target.hasClass('btn-link') && !$target.children().length) {
+            var $hack = $('<table class="o_outlook_hack" style="display: inline-table;vertical-align:middle"><tr><td></td></tr></table>');
             $hack.find('td')
                 .attr('height', $target.outerHeight())
                 .css({
+                    'text-align': $target.parent().css('text-align'),
                     'margin': $target.css('padding'),
                     'border-radius': $target.css('border-radius'),
                     'background-color': $target.css('background-color'),
@@ -298,6 +310,9 @@ function classToStyle($editable) {
                 $(node).remove();
             }
         }
+        else if (node.nodeName === 'IMG' && $target.is('.mx-auto.d-block')) {
+            $target.wrap('<p class="o_outlook_hack" style="text-align:center;margin:0"/>');
+        }
     });
 }
 
@@ -309,8 +324,8 @@ function classToStyle($editable) {
  */
 function styleToClass($editable) {
     // Outlook revert
-    $editable.find('table.o_outlook_hack').each(function () {
-        $(this).after($('a', this));
+    $editable.find('.o_outlook_hack').each(function () {
+        $(this).after($('a,img', this));
     }).remove();
 
     getMatchedCSSRules($editable[0]);
